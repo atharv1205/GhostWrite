@@ -1,49 +1,219 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [clipboardText, setClipboardText] = useState("");
+  const [rewrittenText, setRewrittenText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  const commands = [
+    "Rewrite Selected Text",
+    "Professional Tone",
+    "Friendly Tone",
+    "Summarize",
+    "Fix Grammar",
+  ];
+
+  async function runCommand(mode: string) {
+    try {
+      setLoading(true);
+      setCopied(false);
+
+      const text = await invoke<string>(
+        "get_clipboard_text"
+      );
+
+      setClipboardText(text);
+
+      const improved = await invoke<string>(
+        "rewrite_text",
+        {
+          text,
+          mode,
+        }
+      );
+
+      setRewrittenText(improved);
+
+      await invoke(
+        "set_clipboard_text",
+        {
+          text: improved,
+        }
+      );
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
   }
 
+  async function copyResult() {
+    try {
+      await invoke(
+        "set_clipboard_text",
+        {
+          text: rewrittenText,
+        }
+      );
+
+      setCopied(true);
+
+      setTimeout(() => {
+        setCopied(false);
+      }, 2000);
+
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  function executeCommand(index: number) {
+    switch (commands[index]) {
+      case "Rewrite Selected Text":
+        runCommand("rewrite");
+        break;
+
+      case "Professional Tone":
+        runCommand("professional");
+        break;
+
+      case "Friendly Tone":
+        runCommand("friendly");
+        break;
+
+      case "Summarize":
+        runCommand("summarize");
+        break;
+
+      case "Fix Grammar":
+        runCommand("grammar");
+        break;
+    }
+  }
+
+  useEffect(() => {
+    const handleKeyDown = async (
+      e: KeyboardEvent
+    ) => {
+      if (e.key === "Escape") {
+        try {
+          await invoke("hide_window");
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      if (e.key === "ArrowDown") {
+        setSelectedIndex(
+          (prev) => (prev + 1) % commands.length
+        );
+      }
+
+      if (e.key === "ArrowUp") {
+        setSelectedIndex(
+          (prev) =>
+            prev === 0
+              ? commands.length - 1
+              : prev - 1
+        );
+      }
+
+      if (e.key === "Enter") {
+        executeCommand(selectedIndex);
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+    };
+  }, [selectedIndex]);
+
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <main className="palette">
+      <div className="header">
+        <h2>GhostWrite</h2>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
+      <div className="command-list">
+        {commands.map((command, index) => (
+          <button
+            key={command}
+            className={`command-item ${
+              selectedIndex === index
+                ? "selected"
+                : ""
+            }`}
+            onClick={() =>
+              executeCommand(index)
+            }
+          >
+            {command}
+          </button>
+        ))}
+      </div>
+
+      {clipboardText && (
+        <div
+          style={{
+            marginTop: "20px",
+            padding: "12px",
+            border: "1px solid #444",
+            borderRadius: "8px",
+            textAlign: "left",
+          }}
+        >
+          <h3>Original Text</h3>
+          <p>{clipboardText}</p>
+
+          <h3>Improved Text</h3>
+
+          {loading ? (
+            <p>⏳ Rewriting with Qwen...</p>
+          ) : (
+            <>
+              <p>{rewrittenText}</p>
+
+              {rewrittenText && (
+                <button
+                  className="command-item"
+                  onClick={copyResult}
+                >
+                  Copy Result
+                </button>
+              )}
+
+              {copied && (
+                <p
+                  style={{
+                    marginTop: "10px",
+                  }}
+                >
+                  ✅ Result copied to clipboard
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </main>
   );
 }

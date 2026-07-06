@@ -12,9 +12,17 @@
   "app": {
     "windows": [
       {
-        "title": "ghostwrite",
-        "width": 800,
-        "height": 600
+        "label": "main",
+        "title": "GhostWrite",
+        "width": 700,
+        "height": 450,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "closable": true,
+        "center": true,
+        "alwaysOnTop": true,
+        "visible": false
       }
     ],
     "security": {
